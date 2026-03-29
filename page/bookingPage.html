@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>运动场预订系统</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+
+        .table-container {
+            width: 95%;
+            overflow: auto;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            border-collapse: collapse;
+            font-size: 16px;
+            margin: 0;
+            min-width: 100%;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        td {
+            white-space: nowrap;
+            width: 120px;
+            height: 80px;
+            border: 1px solid #ddd;
+            text-align: center;
+            padding: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .half {
+            background-color: #ff8844;
+        }
+
+        .full {
+            background-color: #ff6633;
+        }
+
+        button {
+            width: 320px;
+            height: 80px;
+            font-size: 20px;
+            background-color: #ff6633;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #ff6633;
+        }
+    </style>
+
+</head>
+
+<body>
+    <h1>运动场预订系统</h1>
+    <div class="table-container">
+        <table id="bookingTable">
+            <!-- 动态生成表格内容 -->
+        </table>
+    </div>
+    <br>
+    <button id="confirmButton">确认预订</button>
+
+    <script>
+        // 初始化变量
+        const table = document.getElementById('bookingTable');
+        const confirmButton = document.getElementById('confirmButton');
+        const rows = 12;
+        const cols = 19;
+        const maxHalfFields = 5;
+        let selectedFields = [];
+
+        // 生成表格
+        function generateTable() {
+            for (let i = 0; i < rows; i++) {
+                let row = table.insertRow();
+                for (let j = 0; j < cols; j++) {
+                    let cell = row.insertCell();
+                    cell.innerHTML = `${String(9 + i).padStart(2, '0')}:00-${String(10 + i).padStart(2, '0')}:00<br>场地${j + 1}`;
+                    cell.dataset.time = i + 1;
+                    cell.dataset.field = j + 1;
+                    cell.dataset.status = 'none';
+                    cell.addEventListener('click', () => toggleSelection(cell));
+                }
+            }
+        }
+
+        // 切换场地选择状态
+        function toggleSelection(cell) {
+            const status = cell.dataset.status;
+            const time = parseInt(cell.dataset.time);
+            const field = parseInt(cell.dataset.field);
+
+            if (status === 'none') {
+                if (countHalfFields() < maxHalfFields) {
+                    cell.classList.add('half');
+                    cell.dataset.status = 'half';
+                    cell.innerHTML += '<br>半场';
+                    selectedFields.push([time, field, 1]);
+                }
+            } else if (status === 'half') {
+                if (countHalfFields() < maxHalfFields) {
+                    cell.classList.remove('half');
+                    cell.classList.add('full');
+                    cell.dataset.status = 'full';
+                    cell.innerHTML = cell.innerHTML.replace('半场', '全场');
+                    updateSelectedFields(time, field, 2);
+                } else {
+                    // 如果已经选了5个半场，切换为全场时直接取消选择
+                    cell.classList.remove('half');
+                    cell.dataset.status = 'none';
+                    cell.innerHTML = `${String(time + 8).padStart(2, '0')}:00-${String(time + 9).padStart(2, '0')}:00<br>场地${field}`;
+                    selectedFields = selectedFields.filter(f => !(f[0] === time && f[1] === field));
+                }
+            } else if (status === 'full') {
+                cell.classList.remove('full');
+                cell.dataset.status = 'none';
+                cell.innerHTML = `${String(time + 8).padStart(2, '0')}:00-${String(time + 9).padStart(2, '0')}:00<br>场地${field}`;
+                selectedFields = selectedFields.filter(f => !(f[0] === time && f[1] === field));
+            }
+        }
+
+        // 更新已选场地信息
+        function updateSelectedFields(time, field, status) {
+            const existingField = selectedFields.find(f => f[0] === time && f[1] === field);
+            if (existingField) {
+                existingField[2] = status;
+            } else {
+                selectedFields.push([time, field, status]);
+            }
+        }
+
+        // 计算已选半场数量
+        function countHalfFields() {
+            return selectedFields.reduce((acc, field) => acc + (field[2] === 1 ? 1 : 2), 0);
+        }
+
+
+        // 获取预订信息
+        function updateTable() {
+            fetch('/venue', {
+                method: 'GET'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        data.forEach(item => {
+                            const time = item[0];
+                            const field = item[1];
+                            const status = item[2];
+                            const cell = table.getElementsByTagName('tr')[time - 1].getElementsByTagName('td')[field - 1];
+                            if (cell) {
+                                if (status === 1) {
+                                    cell.classList.add('half');
+                                    cell.dataset.status = 'half';
+                                    cell.innerHTML += '<br>半场';
+                                } else if (status === 2) {
+                                    cell.classList.add('full');
+                                    cell.dataset.status = 'full';
+                                    cell.innerHTML += '<br>全场';
+                                }
+                                selectedFields.push(item);
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        };
+
+        // 确认预订
+        confirmButton.addEventListener('click', () => {
+            fetch('/venue', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(selectedFields)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('预订成功！');
+                    } else {
+                        alert('预订失败！');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('预订失败！');
+                });
+        });
+
+        // 初始化
+        generateTable();
+        updateTable();
+    </script>
+</body>
+
+</html>
