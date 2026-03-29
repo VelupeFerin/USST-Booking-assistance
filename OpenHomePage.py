@@ -18,7 +18,7 @@ name_list = ['fyq']
 
 
 def open_browser(name):
-    # driver = Chrome(driver_executable_path='./UndetectedChromedriver/chromedriver.exe')
+    # driver = Chrome(driver_executable_path='./chromedriver/undetected_chromedriver.exe')
     driver = Chrome()
 
     # try:
