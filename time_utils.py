@@ -2,13 +2,16 @@ import time
 import datetime
 import asyncio
 
+
 def get_current_time():
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     # return time.time()
 
+
 def time_slot_number_to_time_slot_text(time_slot_number):
     t_int = int(time_slot_number)
     return f'{t_int + 8}:00-{t_int + 9}:00'
+
 
 async def async_waiting_until(h: int, m: int, s: int) -> None:
     """

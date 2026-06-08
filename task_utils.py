@@ -24,7 +24,7 @@ def check_booking_tasks():
     # ---------- 第一遍：逐行解析与基本格式检查 ----------
     for idx, raw_line in enumerate(lines, start=1):
         line = raw_line.strip()
-        if not line:            # 跳过空行
+        if not line:  # 跳过空行
             continue
 
         parts = line.split()
@@ -75,7 +75,8 @@ def check_booking_tasks():
     for (person, venue), task_list in person_venue_map.items():
         if len(task_list) > 1:
             lines_info = ", ".join(f"第{idx}行 '{raw}'" for idx, raw in task_list)
-            errors.append(f"同一人同一场馆重复预订: {person} 在 {venue} 场馆预订了 {len(task_list)} 个场次 -> {lines_info}")
+            errors.append(
+                f"同一人同一场馆重复预订: {person} 在 {venue} 场馆预订了 {len(task_list)} 个场次 -> {lines_info}")
 
     # 规则5：同一场馆的同一场次（时间号+场地号）不能被超过两人预订
     venue_slot_map = defaultdict(list)  # key: (场馆, 时间号, 场地号) -> list of (人, 行号, 原始行)
@@ -91,7 +92,8 @@ def check_booking_tasks():
             )
 
     if errors:
-        return f"[{get_current_time()}] 任务检查未通过，发现以下错误:\n" + "\n".join(f"{i+1}. {err}" for i, err in enumerate(errors))
+        return f"[{get_current_time()}] 任务检查未通过，发现以下错误:\n" + "\n".join(
+            f"{i + 1}. {err}" for i, err in enumerate(errors))
     else:
         return ""
 
@@ -103,9 +105,9 @@ async def check_cookies():
             c_set.add(tp.split()[0])
     check_cookies_tasks = []
     err_msg_list = []
-    x_i=0
+    x_i = 0
     for x in c_set:
-        check_cookies_tasks.append(check_person_cookies_by_browser(x,x_i,err_msg_list))
+        check_cookies_tasks.append(check_person_cookies_by_browser(x, x_i, err_msg_list))
         x_i += 1
     results = await asyncio.gather(*check_cookies_tasks)
     if all(results):
@@ -117,12 +119,12 @@ async def check_cookies():
         return False
 
 
-async def check_person_cookies_by_browser(c,c_i,err_msg_list):
+async def check_person_cookies_by_browser(c, c_i, err_msg_list):
     if not os.path.exists(f'Cookies/{c}.cookies'):
         err_msg_list.append(f'缺少{c}.cookies，请补充')
         return False
 
-    browser = await nd.start(browser_args=[f"--window-position={50*c_i},{50*c_i}"])
+    browser = await nd.start(browser_args=[f"--window-position={32 * c_i},{32 * c_i}"])
     bp = BasePageObject(browser)
     try:
         await browser.cookies.load(f"Cookies/{c}.cookies")
@@ -131,7 +133,7 @@ async def check_person_cookies_by_browser(c,c_i,err_msg_list):
         browser.stop()
         return False
 
-    uip = UserInfoPageObject(await bp.get_my_page())
+    uip = await bp.get_my_info_page()
     i = 20
     while i > 0:
         username = await uip.get_username()
@@ -147,10 +149,8 @@ async def check_person_cookies_by_browser(c,c_i,err_msg_list):
         return False
 
 
-
 def get_booking_task():
     rts = []
-    task_sequence = 1
     with open("BookingTaskList.txt", "r") as btl:
         tasks = btl.readlines()
         task_amount = len(tasks)
@@ -161,8 +161,6 @@ def get_booking_task():
                 "venue": task_info[1],
                 "time_slot_number": task_info[2],
                 "field": task_info[3],
-                "task_sequence": task_sequence,
                 "task_amount": task_amount
             })
-            task_sequence += 1
     return rts

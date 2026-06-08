@@ -6,7 +6,8 @@ from nodriver.cdp.runtime import ExceptionDetails, RemoteObject
 import base64
 
 
-async def wait_elem_and_click(tab: nd.Tab, xpath: str, timeout: float = 5.0) -> str | tuple[RemoteObject, ExceptionDetails | None] | Any:
+async def wait_elem_and_click(tab: nd.Tab, xpath: str, timeout: float = 5.0) -> str | tuple[
+    RemoteObject, ExceptionDetails | None] | Any:
     """
     通过 XPath 查找单个元素并点击（带重试和超时）。
 
@@ -71,6 +72,7 @@ async def is_elem_exists(tab: nd.Tab, xpath: str) -> bool:
     """
     return await tab.evaluate(js_code)
 
+
 async def wait_elem_exists(tab: nd.Tab, xpath: str, timeout: float = 5.0) -> bool:
     """
     等待指定 XPath 的元素出现（存在于 DOM 中）。
@@ -93,6 +95,7 @@ async def wait_elem_exists(tab: nd.Tab, xpath: str, timeout: float = 5.0) -> boo
         if asyncio.get_event_loop().time() >= deadline:
             raise TimeoutError(f"在 {timeout} 秒内等待元素出现超时: {xpath}")
         await asyncio.sleep(0.1)
+
 
 async def wait_for_page_ready(tab: nd.Tab, timeout: float = 10.0, stable_time: float = 0.5):
     """
@@ -219,8 +222,9 @@ async def get_elem_text(tab: nd.Tab, xpath: str) -> str:
     except Exception:
         return ''
 
+
 async def wait_elem_text_equal_to(
-    tab: nd.Tab, xpath: str, expected_text: str, timeout: float = 5.0
+        tab: nd.Tab, xpath: str, expected_text: str, timeout: float = 5.0
 ) -> bool:
     """
     等待指定 XPath 元素的文本内容与给定字符串相等。
@@ -271,8 +275,9 @@ async def wait_elem_text_equal_to(
 
         await asyncio.sleep(0.1)
 
+
 async def wait_elem_text_exist_then_get(
-    tab: nd.Tab, xpath: str, timeout: float = 5.0
+        tab: nd.Tab, xpath: str, timeout: float = 5.0
 ) -> str:
     """
     等待指定 XPath 的元素出现并且其文本内容不为空，然后返回该文本。
@@ -324,6 +329,7 @@ async def wait_elem_text_exist_then_get(
 
         await asyncio.sleep(0.1)
 
+
 async def get_canvas_bytes(tab: nd.Tab, xpath: str) -> bytes:
     """
     获取指定 canvas 元素当前的 PNG 图像数据。
@@ -363,7 +369,6 @@ async def get_canvas_bytes(tab: nd.Tab, xpath: str) -> bytes:
     # 去掉 data URL 前缀，解码 base64
     base64_str = data_url[len('data:image/png;base64,'):]
     return base64.b64decode(base64_str)
-
 
 
 async def elem_scroll_into_view(tab: nd.Tab, xpath: str) -> bool:
