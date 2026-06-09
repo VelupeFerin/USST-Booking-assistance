@@ -16,7 +16,7 @@
 ### Cookies简介
 Cookies用于在不需要他人账号密码的情况下登录他人账号。
 ### 获取他人的Cookies
-把独立程序-get_ydmap-usst_cookies_file.exe发给他人，他人需要安装Chrome浏览器并按照提示操作即可得到“xxx.cookies”文件，之后他人需要把这个文件发给您。
+把独立程序-"获取USST智慧体育Cookies.exe"发给他人，他人需要安装Chrome浏览器并按照提示操作即可得到“xxx.cookies”文件，之后他人需要把这个文件发给您。
 ### 导入Cookies
 收到他人的cookies文件后，将其放到此程序的目录的Cookies文件夹中，导入就完成了。
 ## 订场任务设置
