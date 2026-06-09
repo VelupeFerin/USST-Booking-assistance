@@ -37,7 +37,7 @@ class UserInfoPageObject(BasePageObject):
 
 
 class BookingSchedulePageObject(BasePageObject):
-    date_li_xpath = '/html/body/div[1]/div/div[1]/section/div[1]/div[2]/div[2]/div/ul/li[1]'
+    date_li_xpath = '/html/body/div[1]/div/div[1]/section/div[1]/div[2]/div[2]/div/ul/li[2]'
     target_session_xpath = Template(
         '/html/body/div[1]/div/div[1]/section/div[1]/div[3]/div/div[3]/div[1]/table/tbody/tr[$t]/td[$f]')
     next_step_button_xpath = '/html/body/div[1]/div/div[1]/section/div[1]/div[4]/div[2]/button'
