@@ -89,7 +89,6 @@ async def main():
 
     try:
         browser = await nd.start()
-        print(f'[{get_current_time()}] 浏览器可打开')
     except Exception as e:
         print(f'[{get_current_time()}] 浏览器启动异常：{e}')
         return
@@ -103,13 +102,16 @@ async def main():
     if not await check_cookies():
         return
 
+    print(f'[{get_current_time()}] 前置检查无错误\n')
+
     tasks_paras = get_booking_task()
     print(f'[{get_current_time()}] 将要执行以下任务：')
     for t in tasks_paras:
         time_slot_text = time_slot_number_to_time_slot_text(t["time_slot_number"])
         session_text = f'{time_slot_text} {t["field"]}号场'
-        print(f'[{get_current_time()}] {t["person"]} 订 {t["venue"]}校区 {session_text}')
+        print(f'{t["person"]} 订 {t["venue"]}校区 {session_text}')
 
+    print()
     print(f'[{get_current_time()}] 正在等待直到6:59:00')
     await async_waiting_until(6, 59, 0)
     tasks = []

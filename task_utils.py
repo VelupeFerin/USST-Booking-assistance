@@ -134,18 +134,12 @@ async def check_person_cookies_by_browser(c, c_i, err_msg_list):
         return False
 
     uip = await bp.get_my_info_page()
-    i = 20
-    while i > 0:
-        username = await uip.get_username()
-        if username == '--' or username == '':
-            await asyncio.sleep(0.5)
-            i -= 1
-        else:
-            browser.stop()
-            return True
+    username = await uip.wait_username_then_get()
+    browser.stop()
+    if username:
+        return True
     else:
         err_msg_list.append(f'{c}.cookies 无效')
-        browser.stop()
         return False
 
 

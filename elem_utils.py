@@ -403,3 +403,47 @@ async def elem_scroll_into_view(tab: nd.Tab, xpath: str) -> bool:
     }})()
     """
     return await tab.evaluate(js_code)
+
+
+async def fill_elem_text(tab: nd.Tab, xpath: str, text: str) -> None:
+    """
+    向指定input或textarea元素输入文本内容。
+
+    该函数即时执行，通过获取 HTMLInputElement/HTMLTextAreaElement 原型上的
+    原生 value setter 来设置值，并派发 input 及 change 事件，以确保 React/Vue
+    等框架能正确响应变化。
+
+    若元素不存在或不是可输入元素，调用可能会抛出异常。
+
+    Args:
+        tab:   nodriver 的 Tab 对象
+        xpath: 目标元素的 XPath 表达式
+        text:  要输入的文本内容
+    """
+    js_code = f"""
+    (() => {{
+        const result = document.evaluate(
+            `{xpath}`,
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+        );
+        const el = result.singleNodeValue;
+        if (!el) {{
+            throw new Error(`未找到元素: {xpath}`);
+        }}
+
+        // 获取原型上的原生 value setter（适用于 input 和 textarea）
+        const prototype = el instanceof HTMLTextAreaElement
+            ? HTMLTextAreaElement.prototype
+            : HTMLInputElement.prototype;
+        const nativeSetter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+        nativeSetter.call(el, `{text}`);
+
+        // 派发事件以通知框架
+        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+    }})()
+    """
+    await tab.evaluate(js_code)

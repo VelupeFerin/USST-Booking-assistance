@@ -10,30 +10,53 @@ class BasePageObject:
     venue_516_url = 'https://usst.ydmap.cn/booking/schedule/102285?salesItemId=102831'
     venue_1100_url = 'https://usst.ydmap.cn/booking/schedule/102293?salesItemId=102829'
     user_my_url = 'https://usst.ydmap.cn/user/my'
+    login_url = 'https://usst.ydmap.cn/user/login'
+
     title_xpath = '/html/head/title'
+    venue_str_url_dict = {'516':venue_516_url, '1100':venue_1100_url}
 
     def __init__(self, page):
         self.page = page
 
     async def get_venue_page(self, venue_str):
-        if venue_str == '516' or venue_str == '1100':
-            url = self.venue_516_url if venue_str == '516' else self.venue_1100_url
-            return BookingSchedulePageObject(await self.page.get(url))
-        else:
-            return None
+        url = self.venue_str_url_dict.get(venue_str)
+        return BookingSchedulePageObject(await self.page.get(url)) if url else None
 
     async def get_my_info_page(self):
         return UserInfoPageObject(await self.page.get(self.user_my_url))
 
+    async def get_login_page(self):
+        return LoginPageObject(await self.page.get(self.login_url))
+
+class LoginPageObject(BasePageObject):
+
+    def __init__(self, page):
+        super().__init__(page)
+
+    async def wait_login(self):
+        tab = self.page
+        while not (await get_elem_text(tab, self.title_xpath) == UserInfoPageObject.page_expected_title):
+            await asyncio.sleep(0.5)
+        return UserInfoPageObject(tab)
+
 
 class UserInfoPageObject(BasePageObject):
+    page_expected_title = '个人中心'
     username_xpath = '/html/body/div[1]/div/div[1]/section/section/div[1]/div[1]/div[2]/div[1]/span'
 
     def __init__(self, page):
         super().__init__(page)
 
-    async def get_username(self):
-        return await get_elem_text(self.page, self.username_xpath)
+    async def wait_username_then_get(self,retry = 20):
+        i = retry
+        while i > 0:
+            username = await get_elem_text(self.page, self.username_xpath)
+            if username == '--' or username == '':
+                await asyncio.sleep(0.5)
+                i -= 1
+            else:
+                return username
+        return None
 
 
 class BookingSchedulePageObject(BasePageObject):
