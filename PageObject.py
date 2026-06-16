@@ -15,8 +15,19 @@ class BasePageObject:
     title_xpath = '/html/head/title'
     venue_str_url_dict = {'516':venue_516_url, '1100':venue_1100_url}
 
-    def __init__(self, page):
+    def __init__(self,page):
         self.page = page
+
+    async def is_page_exist(self):
+        try:
+            target_infos = await self.page.browser.send(nd.cdp.target.get_targets())
+            current_page_target_id = self.page.target_id
+            for target_info in target_infos:
+                if current_page_target_id == target_info.target_id:
+                    return True
+        except Exception:
+            pass # 若浏览器已关闭或连接异常，则视为标签页不存在
+        return False
 
     async def get_venue_page(self, venue_str):
         url = self.venue_str_url_dict.get(venue_str)
@@ -35,9 +46,12 @@ class LoginPageObject(BasePageObject):
 
     async def wait_login(self):
         tab = self.page
-        while not (await get_elem_text(tab, self.title_xpath) == UserInfoPageObject.page_expected_title):
-            await asyncio.sleep(0.5)
-        return UserInfoPageObject(tab)
+        while await self.is_page_exist():
+            if await get_elem_text(tab, self.title_xpath) == UserInfoPageObject.page_expected_title:
+                return UserInfoPageObject(tab)
+            else:
+                await asyncio.sleep(0.5)
+        return None
 
 
 class UserInfoPageObject(BasePageObject):
@@ -49,7 +63,7 @@ class UserInfoPageObject(BasePageObject):
 
     async def wait_username_then_get(self,retry = 20):
         i = retry
-        while i > 0:
+        while i > 0 and await self.is_page_exist():
             username = await get_elem_text(self.page, self.username_xpath)
             if username == '--' or username == '':
                 await asyncio.sleep(0.5)

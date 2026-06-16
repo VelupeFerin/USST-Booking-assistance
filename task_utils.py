@@ -100,7 +100,7 @@ def check_booking_tasks():
 
 async def check_cookies():
     c_set = set()
-    with open("BookingTaskList.txt", "r") as fc:
+    with open("BookingTaskList.txt", "r",encoding='utf-8') as fc:
         for tp in fc.readlines():
             c_set.add(tp.split()[0])
     check_cookies_tasks = []
@@ -125,7 +125,7 @@ async def check_person_cookies_by_browser(c, c_i, err_msg_list):
         return False
 
     browser = await nd.start(browser_args=[f"--window-position={32 * c_i},{32 * c_i}"])
-    bp = BasePageObject(browser)
+    bp = BasePageObject(browser.main_tab)
     try:
         await browser.cookies.load(f"Cookies/{c}.cookies")
     except Exception:
@@ -136,16 +136,16 @@ async def check_person_cookies_by_browser(c, c_i, err_msg_list):
     uip = await bp.get_my_info_page()
     username = await uip.wait_username_then_get()
     browser.stop()
-    if username:
+    if username == c:
         return True
     else:
-        err_msg_list.append(f'{c}.cookies 无效')
+        err_msg_list.append(f'{c}.cookies 无效，或检查过程中出现错误')
         return False
 
 
 def get_booking_task():
     rts = []
-    with open("BookingTaskList.txt", "r") as btl:
+    with open("BookingTaskList.txt", "r",encoding='utf-8') as btl:
         tasks = btl.readlines()
         task_amount = len(tasks)
         for task in tasks:

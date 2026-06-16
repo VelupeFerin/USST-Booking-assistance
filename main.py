@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 
 import aiofiles
 import nodriver as nd
@@ -14,7 +15,7 @@ def init_dir_and_files():
     os.makedirs('Cookies', exist_ok=True)
     os.makedirs('session_snapshot', exist_ok=True)
     if not os.path.exists('BookingTaskList.txt'):
-        with open('BookingTaskList.txt', 'w'):
+        with open('BookingTaskList.txt', 'w', encoding='utf-8') as f:
             pass
 
 
@@ -27,7 +28,7 @@ async def booking_task_execute(task, browser):
 
     print(f'[{get_current_time()}] {person} {venue} 启动浏览器')
     await browser.cookies.load(f"Cookies/{person}.cookies")
-    bp = PageObject.BasePageObject(browser)
+    bp = PageObject.BasePageObject(browser.main_tab)
     bsp = await bp.get_venue_page(venue)
 
     await bsp.wait_for_page_ready()
@@ -82,7 +83,7 @@ async def booking_task_execute(task, browser):
 async def main():
     print(f'[{get_current_time()}] 进行前置检查')
 
-    with open("BookingTaskList.txt", "r") as fb:
+    with open("BookingTaskList.txt", "r", encoding='utf-8') as fb:
         if len(fb.readlines()) == 0:
             print(f'[{get_current_time()}] 没有任务需要执行')
             return
@@ -102,7 +103,7 @@ async def main():
     if not await check_cookies():
         return
 
-    print(f'[{get_current_time()}] 前置检查无错误\n')
+    print(f'[{get_current_time()}] 前置检查无错误')
 
     tasks_paras = get_booking_task()
     print(f'[{get_current_time()}] 将要执行以下任务：')
@@ -111,7 +112,6 @@ async def main():
         session_text = f'{time_slot_text} {t["field"]}号场'
         print(f'{t["person"]} 订 {t["venue"]}校区 {session_text}')
 
-    print()
     print(f'[{get_current_time()}] 正在等待直到6:59:00')
     await async_waiting_until(6, 59, 0)
     tasks = []
@@ -128,6 +128,7 @@ async def main():
 
 
 if __name__ == '__main__':
+    os.chdir(os.path.dirname(sys.executable))
     init_dir_and_files()
     nd.loop().run_until_complete(main())
     input()
