@@ -20,7 +20,7 @@ async def main():
     user32 = ctypes.windll.user32
     dialog_choice = user32.MessageBoxW(
         0,
-        "即将打开Chrome浏览器，并跳转到USST智慧体育登录页面。请登录以导出cookies。\n浏览器由本程序打开，若未打开则可能没有安装Chrome或打开过程中出现问题。\n点击“确定”继续",
+        "即将打开Chrome浏览器，并跳转到USST智慧体育登录页面。请登录以导出cookies。\n浏览器由本程序打开，若未打开则可能没有安装Chrome或打开过程中出现问题。\n点击“确定”继续。",
         message_box_title,
         MB_OKCANCEL | MB_ICONINFORMATION
     )
@@ -39,7 +39,7 @@ async def main():
             browser.stop()
             dialog_choice = user32.MessageBoxW(
                 0,
-                "出现错误，可能没有成功登录或浏览器被关闭。请重试",
+                "出现错误，可能没有成功登录或浏览器被关闭。请重试。",
                 message_box_title,
                 MB_RETRYCANCEL | MB_ICONWARNING
             )

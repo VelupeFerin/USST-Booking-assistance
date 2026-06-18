@@ -1,5 +1,6 @@
 from string import Template
 
+from browser_utils import simple_http_get
 from elem_utils import *
 import asyncio
 
@@ -13,9 +14,9 @@ class BasePageObject:
     login_url = 'https://usst.ydmap.cn/user/login'
 
     title_xpath = '/html/head/title'
-    venue_str_url_dict = {'516':venue_516_url, '1100':venue_1100_url}
+    venue_str_url_dict = {'516': venue_516_url, '1100': venue_1100_url}
 
-    def __init__(self,page):
+    def __init__(self, page):
         self.page = page
 
     async def is_page_exist(self):
@@ -26,7 +27,7 @@ class BasePageObject:
                 if current_page_target_id == target_info.target_id:
                     return True
         except Exception:
-            pass # 若浏览器已关闭或连接异常，则视为标签页不存在
+            pass  # 若浏览器已关闭或连接异常，则视为标签页不存在
         return False
 
     async def get_venue_page(self, venue_str):
@@ -38,6 +39,33 @@ class BasePageObject:
 
     async def get_login_page(self):
         return LoginPageObject(await self.page.get(self.login_url))
+
+    async def get_server_timestamp(self):
+        return (await simple_http_get(self.page, '/srv100308/api/pub/tool/getSysDate'))['timestamp']
+
+    async def waiting_server_time_until(self, target_time, recheck: bool = True):
+        """
+        异步等待，直到远程服务器时间达到或超过指定的目标时间。
+        :param target_time: 目标时间点，视为本地时区。假设服务器与本地机器处于同一时区。
+        :param recheck:     若为 True，则在首次等待结束后循环检查，直到确认服务器时间已超过目标；
+                             若为 False，则仅等待一次计算出的时长后直接返回。
+        :return:            无返回值
+        """
+        target_ts_ms = int(target_time.timestamp() * 1000)
+        server_ts_ms = await self.get_server_timestamp()
+        wait_ms = target_ts_ms - server_ts_ms
+        if wait_ms <= 0:
+            return
+        await asyncio.sleep(wait_ms / 1000.0)
+        if not recheck:
+            return
+        while True:
+            current_server_ts = await self.get_server_timestamp()
+            if current_server_ts >= target_ts_ms:
+                break
+            remaining_ms = target_ts_ms - current_server_ts
+            await asyncio.sleep(remaining_ms / 1000.0)
+
 
 class LoginPageObject(BasePageObject):
 
@@ -61,7 +89,7 @@ class UserInfoPageObject(BasePageObject):
     def __init__(self, page):
         super().__init__(page)
 
-    async def wait_username_then_get(self,retry = 20):
+    async def wait_username_then_get(self, retry=20):
         i = retry
         while i > 0 and await self.is_page_exist():
             username = await get_elem_text(self.page, self.username_xpath)
@@ -90,8 +118,9 @@ class BookingSchedulePageObject(BasePageObject):
     async def click_date(self):
         await wait_elem_and_click(self.page, self.date_li_xpath)
 
-    async def waiting_session_open_and_select(self, t, f, retry=60):
+    async def select_session(self, t, f, retry=60):
         # print(f'[{get_current_time()}] waiting_session_open_and_select begin')
+        # TODO:从循环点击检查改为直接点击。可用localStorage确认
         tab = self.page
         rest_click_times = retry
         while rest_click_times > 0:

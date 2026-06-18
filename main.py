@@ -1,11 +1,12 @@
 import asyncio
+import datetime
+import time
 import os
 import sys
-
 import aiofiles
 import nodriver as nd
-
 import PageObject
+from datetime import datetime, date, time
 from task_utils import get_booking_task, check_booking_tasks, check_cookies
 from time_utils import async_waiting_until, get_current_time, time_slot_number_to_time_slot_text
 
@@ -33,12 +34,15 @@ async def booking_task_execute(task, browser):
 
     await bsp.wait_for_page_ready()
     await bsp.click_date()
-    print(f'[{get_current_time()}] {person} {venue} 正在等待直到6:59:57')
+    # print(f"[{get_current_time()}] {person} {venue} 服务器时间相对于本地时间：{(await bsp.get_server_time()) / 1000.0 - time.time():+.3f} 秒")
+    print(f'[{get_current_time()}] {person} {venue} 正在等待直到07:00:00')
     # await asyncio.sleep(3)
     # await async_waiting_until(3, 7, 0)
-    await async_waiting_until(6, 59, 57)
+    # await async_waiting_until(6, 59, 57)
+    await bsp.waiting_server_time_until(datetime.combine(datetime.today(), time(7, 0, 0)))
+
     print(f'[{get_current_time()}] {person} {venue} 开始订场')
-    if not await bsp.waiting_session_open_and_select(time_slot_number, field):
+    if not await bsp.select_session(time_slot_number, field):
         print(f'[{get_current_time()}] {person} {venue} 场次不可选')
         session_snapshot_bytes = await bsp.get_session_snapshot_bytes(time_slot_number, field)
         session_snapshot_file_name = f'[{get_current_time()}] {person} {venue} {time_slot_text} {task["field"]}号场.png'.replace(
@@ -52,7 +56,7 @@ async def booking_task_execute(task, browser):
     snp = await bsp.confirm_box_click()
     print(f'[{get_current_time()}] {person} {venue} 已选择场次')
 
-    if not await snp.click_add_session_number():
+    if not await snp.click_add_session_number():  # TODO:改为使用fill_elem_text()直接设置数量
         print(f'[{get_current_time()}] {person} {venue} 场次库存不足')
         browser.stop()
         return
@@ -112,7 +116,7 @@ async def main():
         session_text = f'{time_slot_text} {t["field"]}号场'
         print(f'{t["person"]} 订 {t["venue"]}校区 {session_text}')
 
-    print(f'[{get_current_time()}] 正在等待直到6:59:00')
+    print(f'[{get_current_time()}] 正在等待直到06:59:00')
     await async_waiting_until(6, 59, 0)
     tasks = []
     i = 0
