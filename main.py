@@ -22,10 +22,11 @@ def init_dir_and_files():
 
 async def booking_task_execute(task, browser):
     person = task["person"]
-    time_slot_number = task["time_slot_number"]
-    time_slot_text = time_slot_number_to_time_slot_text(time_slot_number)
-    field = task["field"]
     venue = task["venue"]
+    time_slot_number = task["time_slot_number"]
+    field = task["field"]
+    target_sessions = {(int(time_slot_number), int(field))}  # TODO:此处暂时使用集合，便于为后继单个任务订多个场次的改动
+    stock = 2
 
     print(f'[{get_current_time()}] {person} {venue} 启动浏览器')
     await browser.cookies.load(f"Cookies/{person}.cookies")
@@ -33,30 +34,33 @@ async def booking_task_execute(task, browser):
     bsp = await bp.get_venue_page(venue)
 
     await bsp.wait_for_page_ready()
-    await bsp.click_date()
-    # print(f"[{get_current_time()}] {person} {venue} 服务器时间相对于本地时间：{(await bsp.get_server_time()) / 1000.0 - time.time():+.3f} 秒")
+    await bsp.select_date()
+    # print(f"[{get_current_time()}] {person} {venue} 服务器时间相对于本地时间：{(await bsp.get_server_timestamp()) / 1000.0 - time.time():+.3f} 秒")
     print(f'[{get_current_time()}] {person} {venue} 正在等待直到07:00:00')
     # await asyncio.sleep(3)
-    # await async_waiting_until(3, 7, 0)
-    # await async_waiting_until(6, 59, 57)
     await bsp.waiting_server_time_until(datetime.combine(datetime.today(), time(7, 0, 0)))
+    # await bsp.waiting_server_time_until(datetime.combine(datetime.today(), time(0, 22, 0)))
 
     print(f'[{get_current_time()}] {person} {venue} 开始订场')
-    if not await bsp.select_session(time_slot_number, field):
-        print(f'[{get_current_time()}] {person} {venue} 场次不可选')
-        session_snapshot_bytes = await bsp.get_session_snapshot_bytes(time_slot_number, field)
+
+    selected_sessions = await bsp.select_sessions(target_sessions)
+    for s in target_sessions - selected_sessions:
+        time_slot_text = time_slot_number_to_time_slot_text(s[0])
         session_snapshot_file_name = f'[{get_current_time()}] {person} {venue} {time_slot_text} {task["field"]}号场.png'.replace(
             ':', '：')
-        with open(os.path.join('session_snapshot', session_snapshot_file_name), "wb") as fss:
-            fss.write(session_snapshot_bytes)
+        session_snapshot_bytes = await bsp.get_session_snapshot_bytes(s[0],s[1])
+        async with aiofiles.open(os.path.join('session_snapshot', session_snapshot_file_name), "wb") as fss:
+            await fss.write(session_snapshot_bytes)
         print(
-            f'[{get_current_time()}] {person} {venue} 场次不可选时的场次快照已保存到session_snapshot/{session_snapshot_file_name}')
+            f'[{get_current_time()}] {person} {venue} 存在场次不可选，快照已保存到session_snapshot/{session_snapshot_file_name}')
+    if not await bsp.click_next_step_button():
+        print(f'[{get_current_time()}] {person} {venue} 此任务的所有场次都不可选')
         browser.stop()
         return
     snp = await bsp.confirm_box_click()
     print(f'[{get_current_time()}] {person} {venue} 已选择场次')
 
-    if not await snp.click_add_session_number():  # TODO:改为使用fill_elem_text()直接设置数量
+    if not await snp.set_session_number(stock):
         print(f'[{get_current_time()}] {person} {venue} 场次库存不足')
         browser.stop()
         return
@@ -118,6 +122,7 @@ async def main():
 
     print(f'[{get_current_time()}] 正在等待直到06:59:00')
     await async_waiting_until(6, 59, 0)
+    # await async_waiting_until(0, 22, 0)
     tasks = []
     i = 0
     for t in tasks_paras:
@@ -132,7 +137,7 @@ async def main():
 
 
 if __name__ == '__main__':
-    os.chdir(os.path.dirname(sys.executable))
+    os.chdir(os.path.dirname(sys.executable)) # 调试时需要注释掉此行
     init_dir_and_files()
     nd.loop().run_until_complete(main())
     input()

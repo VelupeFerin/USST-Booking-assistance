@@ -102,7 +102,7 @@ class UserInfoPageObject(BasePageObject):
 
 
 class BookingSchedulePageObject(BasePageObject):
-    date_li_xpath = '/html/body/div[1]/div/div[1]/section/div[1]/div[2]/div[2]/div/ul/li[2]'
+    date_li_xpath = '/html/body/div[1]/div/div[1]/section/div[1]/div[2]/div[2]/div/div/ul/li[2]'
     target_session_xpath = Template(
         '/html/body/div[1]/div/div[1]/section/div[1]/div[3]/div/div[3]/div[1]/table/tbody/tr[$t]/td[$f]')
     next_step_button_xpath = '/html/body/div[1]/div/div[1]/section/div[1]/div[4]/div[2]/button'
@@ -115,27 +115,33 @@ class BookingSchedulePageObject(BasePageObject):
     async def wait_for_page_ready(self):
         await wait_for_page_ready(self.page)
 
-    async def click_date(self):
+    async def select_date(self):
         await wait_elem_and_click(self.page, self.date_li_xpath)
 
-    async def select_session(self, t, f, retry=60):
+    # async def select_sessions(self, t, f, retry=60):
+    async def select_sessions(self, target_sessions):
         # print(f'[{get_current_time()}] waiting_session_open_and_select begin')
-        # TODO:从循环点击检查改为直接点击。可用localStorage确认
         tab = self.page
-        rest_click_times = retry
-        while rest_click_times > 0:
-            await wait_elem_and_click(tab, self.target_session_xpath.substitute(t=t, f=f))
-            if await is_button_clickable(tab, self.next_step_button_xpath):
-                await (await tab.find(self.next_step_button_xpath)).mouse_click()  # 使用mouse_click()可以绕过检测
-                break
-            else:
-                await asyncio.sleep(0.1)
-                rest_click_times -= 1
-        if rest_click_times <= 0:
-            return False
-        else:
-            # print(f'[{get_current_time()}] waiting_session_open_and_select end')
+        for s in target_sessions:
+            await wait_elem_and_click(tab, self.target_session_xpath.substitute(t=s[0], f=s[1]))
+        # 从localStorage获取被点击且被选择的场次
+        ss = await tab.evaluate(
+            "JSON.parse(localStorage.getItem('select-cols-cache')).cols.map((item)=>{{return item.key;}});")
+        ss_set = set()
+        if len(ss) > 0:
+            for i in ss:
+                t, f = i['value'].split('-')
+                ss_set.add((int(t) + 1, int(f) + 1))
+        return ss_set
+        # print(f'[{get_current_time()}] waiting_session_open_and_select end')
+
+    async def click_next_step_button(self):
+        tab = self.page
+        if await is_button_clickable(tab, self.next_step_button_xpath):
+            await (await tab.find(self.next_step_button_xpath)).mouse_click()  # 使用mouse_click()可以绕过检测
             return True
+        else:
+            return False
 
     async def confirm_box_click(self):
         # print(f'[{get_current_time()}] confirm_box_click begin')
@@ -155,8 +161,8 @@ class BookingSchedulePageObject(BasePageObject):
 
 
 class SessionNumberPageObject(BasePageObject):
-    add_session_number_button_xpath = '/html/body/div[1]/div/div[1]/div/section/div[1]/div/div[3]/div/div[2]/button[2]'
     session_number_xpath = '/html/body/div[1]/div/div[1]/div/section/div[1]/div/div[3]/div/div[1]/span'
+    session_number_input_xpath = '/html/body/div[1]/div/div[1]/div/section/div[1]/div/div[3]/div/div[2]/input'
     next_step_button_xpath = '/html/body/div[1]/div/div[1]/div/section/div[2]/div[2]/button'
 
     def __init__(self, page):
@@ -165,14 +171,14 @@ class SessionNumberPageObject(BasePageObject):
     async def wait_for_page_ready(self):
         await wait_for_page_ready(self.page)
 
-    async def click_add_session_number(self):
+    async def set_session_number(self, n):
         # print(f'[{get_current_time()}] click_add_session_number begin')
         tab = self.page
-        if (await wait_elem_text_exist_then_get(tab, self.session_number_xpath)).strip() == '1':
+        if int((await wait_elem_text_exist_then_get(tab, self.session_number_xpath)).strip()) < n:
             return False
         else:
-            await wait_elem_and_click(tab, self.add_session_number_button_xpath)
-            # print(f'[{get_current_time()}] click_add_session_number end')
+            await fill_elem_text(tab, self.session_number_input_xpath, str(n))
+            # print(f'[{get_current_time()}] set_session_number end')
             return True
 
     async def click_next_step_button(self, retry=10):
