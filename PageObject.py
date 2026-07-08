@@ -1,6 +1,7 @@
 from string import Template
 
-from browser_utils import simple_http_get
+from datetime import datetime, timedelta
+from browser_utils import simple_http_get, wait_for_page_ready
 from elem_utils import *
 import asyncio
 
@@ -29,6 +30,9 @@ class BasePageObject:
         except Exception:
             pass  # 若浏览器已关闭或连接异常，则视为标签页不存在
         return False
+
+    async def wait_for_page_ready(self):
+        await wait_for_page_ready(self.page)
 
     async def get_venue_page(self, venue_str):
         url = self.venue_str_url_dict.get(venue_str)
@@ -102,7 +106,8 @@ class UserInfoPageObject(BasePageObject):
 
 
 class BookingSchedulePageObject(BasePageObject):
-    date_li_xpath = '/html/body/div[1]/div/div[1]/section/div[1]/div[2]/div[2]/div/div/ul/li[2]'
+    page_section_xpath = '/html/body/div[1]/div/div[1]/section'
+    # date_li_xpath = Template('/html/body/div[1]/div/div[1]/section/div[1]/div[2]/div[2]/div/div/ul/li[$d]')
     target_session_xpath = Template(
         '/html/body/div[1]/div/div[1]/section/div[1]/div[3]/div/div[3]/div[1]/table/tbody/tr[$t]/td[$f]')
     next_step_button_xpath = '/html/body/div[1]/div/div[1]/section/div[1]/div[4]/div[2]/button'
@@ -112,15 +117,21 @@ class BookingSchedulePageObject(BasePageObject):
     def __init__(self, page):
         super().__init__(page)
 
-    async def wait_for_page_ready(self):
-        await wait_for_page_ready(self.page)
+    # async def select_date(self, d):
+    #     await wait_elem_and_click(self.page, self.date_li_xpath.substitute(d=d))
 
-    async def select_date(self):
-        await wait_elem_and_click(self.page, self.date_li_xpath)
+    async def set_target_date_offset(self, date_offset):
+        timestamp_ms = int((datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+            days=date_offset)).timestamp() * 1000)
+        await self.page.evaluate(f"localStorage.setItem('datetime-day-dayName-weekName',{timestamp_ms});")
 
-    # async def select_sessions(self, t, f, retry=60):
+    async def set_server_time_duration(self, timestamp_offset):
+        await self.page.evaluate(
+            f"(async () => {{document.getElementById('app').__vue__.$store.commit('global/setServerTime',"
+            f"{{serverTime: Date.now()+{timestamp_offset * 1000}}});await Vue.nextTick()}})();")
+
     async def select_sessions(self, target_sessions):
-        # print(f'[{get_current_time()}] waiting_session_open_and_select begin')
+        # print(f'[{get_current_time()}] select_sessions begin')
         tab = self.page
         for s in target_sessions:
             await wait_elem_and_click(tab, self.target_session_xpath.substitute(t=s[0], f=s[1]))
@@ -133,23 +144,30 @@ class BookingSchedulePageObject(BasePageObject):
                 t, f = i['value'].split('-')
                 ss_set.add((int(t) + 1, int(f) + 1))
         return ss_set
-        # print(f'[{get_current_time()}] waiting_session_open_and_select end')
+        # print(f'[{get_current_time()}] select_sessions end')
 
     async def click_next_step_button(self):
         tab = self.page
         if await is_button_clickable(tab, self.next_step_button_xpath):
-            await (await tab.find(self.next_step_button_xpath)).mouse_click()  # 使用mouse_click()可以绕过检测
+            # await (await tab.find(self.next_step_button_xpath)).mouse_click()  # 使用mouse_click()可以绕过检测
+            await tab.evaluate(  # 另一种绕过检测的脚本
+                f"document.evaluate('{self.page_section_xpath}',document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue.__vue__.sure({{isTrusted:true}})")
             return True
         else:
             return False
 
     async def confirm_box_click(self):
         # print(f'[{get_current_time()}] confirm_box_click begin')
-        tab = self.page
-        button_section_text = await wait_elem_text_exist_then_get(tab, self.confirm_button_section_xpath)
-        n = '1' if button_section_text == ' 接受  返回 ' else '2'
-        await (await tab.find(self.confirm_button_xpath.substitute(n=n))).mouse_click()
+        # tab = self.page
+        # button_section_text = await wait_elem_text_exist_then_get(tab, self.confirm_button_section_xpath)
+        # n = '1' if button_section_text == ' 接受  返回 ' else '2'
+        # await (await tab.find(self.confirm_button_xpath.substitute(n=n))).mouse_click()
         # print(f'[{get_current_time()}] confirm_box_click end')
+
+        tab = self.page
+        await wait_elem_text_exist_then_get(tab, self.confirm_button_section_xpath)
+        await tab.evaluate(  # 绕过检测的脚本
+            f"document.evaluate('{self.page_section_xpath}',document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue.__vue__.$children[10].goBack({{isTrusted:true}},false)")
         return SessionNumberPageObject(tab)
 
     async def get_session_snapshot_bytes(self, t, f):
@@ -161,15 +179,13 @@ class BookingSchedulePageObject(BasePageObject):
 
 
 class SessionNumberPageObject(BasePageObject):
+    page_expected_title = '选择数量'
     session_number_xpath = '/html/body/div[1]/div/div[1]/div/section/div[1]/div/div[3]/div/div[1]/span'
     session_number_input_xpath = '/html/body/div[1]/div/div[1]/div/section/div[1]/div/div[3]/div/div[2]/input'
     next_step_button_xpath = '/html/body/div[1]/div/div[1]/div/section/div[2]/div[2]/button'
 
     def __init__(self, page):
         super().__init__(page)
-
-    async def wait_for_page_ready(self):
-        await wait_for_page_ready(self.page)
 
     async def set_session_number(self, n):
         # print(f'[{get_current_time()}] click_add_session_number begin')
@@ -181,14 +197,15 @@ class SessionNumberPageObject(BasePageObject):
             # print(f'[{get_current_time()}] set_session_number end')
             return True
 
-    async def click_next_step_button(self, retry=10):
+    async def click_next_step_button(self, timeout=10):
+        """
         # print(f'[{get_current_time()}] click_next_step_button begin')
         tab = self.page
         rest_click_times = retry
         while rest_click_times > 0:
             try:
-                await(await tab.find(self.next_step_button_xpath, timeout=0.5)).mouse_click()
-                # 点击后，按钮会短暂消失（很短的时间），原因不明
+              await(await tab.find(self.next_step_button_xpath, timeout=0.5)).mouse_click()
+               # 点击后，按钮会短暂消失（很短的时间），原因不明
             except Exception:
                 pass
             if (await get_elem_text(tab, self.title_xpath)) == PaymentResultPageObject.page_expected_title:
@@ -201,6 +218,21 @@ class SessionNumberPageObject(BasePageObject):
         else:
             # print(f'[{get_current_time()}] click_next_step_button end')
             return PaymentResultPageObject(tab)
+        """
+        tab = self.page
+        await tab.evaluate(
+            f"""
+        const startTime = Date.now();
+        const timerId = setInterval(() => {{
+          if (document.title !== '{self.page_expected_title}' || Date.now() - startTime >= {timeout * 1000}) {{
+            clearInterval(timerId);
+            return;
+          }}
+          document.evaluate('/html/body/div[1]/div/div[1]/div',document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue.__vue__.toSave({{isTrusted:true}});
+        }}, 100);
+        """)
+        await wait_elem_text_equal_to(tab, self.title_xpath, PaymentResultPageObject.page_expected_title, timeout)
+        return PaymentResultPageObject(tab)
 
 
 class PaymentResultPageObject(BasePageObject):
@@ -224,9 +256,6 @@ class OrderDetailPageObject(BasePageObject):
 
     def __init__(self, page):
         super().__init__(page)
-
-    async def wait_for_page_ready(self):
-        await wait_for_page_ready(self.page)
 
     async def get_order_id(self):
         return (await get_elem_text(self.page, self.order_id_xpath))[5:-1]

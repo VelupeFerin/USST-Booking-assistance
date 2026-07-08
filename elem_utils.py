@@ -97,68 +97,6 @@ async def wait_elem_exists(tab: nd.Tab, xpath: str, timeout: float = 5.0) -> boo
         await asyncio.sleep(0.1)
 
 
-async def wait_for_page_ready(tab: nd.Tab, timeout: float = 10.0, stable_time: float = 0.5):
-    """
-    等待页面加载完成并且内容保持稳定。
-
-    Args:
-        tab:         nodriver 的 Tab 对象
-        timeout:     最大等待时间（秒），默认 10 秒
-        stable_time: 页面无变化视为稳定的持续时间（秒），默认 0.5 秒
-
-    Raises:
-        TimeoutError: 在指定时间内页面未能稳定加载
-    """
-    js_check_ready = """
-    (() => {
-        return document.readyState === 'complete';
-    })()
-    """
-    js_get_dom_snapshot = """
-    (() => {
-        return document.body ? document.body.innerHTML.length : 0;
-    })()
-    """
-
-    deadline = asyncio.get_event_loop().time() + timeout
-    last_dom_length = -1
-    stable_start = None
-
-    while True:
-        # 1. 检查 readyState 是否为 complete
-        try:
-            ready = await tab.evaluate(js_check_ready)
-        except Exception:
-            ready = False
-
-        # 2. 获取当前 DOM 大小
-        try:
-            current_length = await tab.evaluate(js_get_dom_snapshot)
-        except Exception:
-            current_length = 0
-
-        if ready and current_length > 0:
-            if current_length == last_dom_length:
-                # DOM 大小没有变化
-                if stable_start is None:
-                    stable_start = asyncio.get_event_loop().time()
-                elif asyncio.get_event_loop().time() - stable_start >= stable_time:
-                    return  # 页面稳定，退出
-            else:
-                # DOM 还在变化，重置稳定计时
-                stable_start = None
-            last_dom_length = current_length
-        else:
-            # 未就绪或无内容，重置稳定计时
-            stable_start = None
-
-        # 超时检查
-        if asyncio.get_event_loop().time() >= deadline:
-            raise TimeoutError(f"页面在 {timeout} 秒内未能稳定加载")
-
-        await asyncio.sleep(0.2)
-
-
 async def is_button_clickable(tab: nd.Tab, xpath: str) -> bool:
     """
     判断指定 XPath 的按钮当前是否处于可点击状态。

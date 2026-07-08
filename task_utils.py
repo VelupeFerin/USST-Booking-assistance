@@ -155,6 +155,7 @@ def get_booking_task():
                 "venue": task_info[1],
                 "time_slot_number": task_info[2],
                 "field": task_info[3],
-                "task_amount": task_amount
+                "task_amount": task_amount,
+                "stock": 2
             })
     return rts

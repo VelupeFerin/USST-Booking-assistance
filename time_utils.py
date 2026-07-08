@@ -4,7 +4,7 @@ import asyncio
 
 
 def get_current_time():
-    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + " " + str(time.time()%1)
     # return time.time()
 
 
