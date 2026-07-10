@@ -1,10 +1,240 @@
 import asyncio
+import json
 import os
+from datetime import datetime, time, timedelta
 from collections import defaultdict
 import nodriver as nd
-
-from PageObject import BasePageObject, UserInfoPageObject
+from PageObject import BasePageObject
 from time_utils import get_current_time
+
+# ==================== 场馆配置字典 ====================
+
+VENUE_CONFIG = {
+    "516": {
+        "open_time": time(7, 0),  # 开放预订时间 7:00
+        "max_tickets_per_slot": 4,  # 每个场次最大票数
+        "max_tickets_per_person_per_slot": 2,  # 每人每场次最大可订票数
+        "max_orders_per_person": 1,  # 每人最大订单数
+        "max_slots_per_order": 1,  # 每个订单最大场次数
+        "time_slots": ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00',
+                       '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00', '19:00-20:00', '20:00-21:00'],
+        "courts": [f"{i}号羽毛球场" for i in range(1, 20)]  # 场地号 0~18
+    },
+    "1100": {
+        "open_time": time(7, 0),
+        "max_tickets_per_slot": 4,
+        "max_tickets_per_person_per_slot": 2,
+        "max_orders_per_person": 1,
+        "max_slots_per_order": 1,
+        "time_slots": ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00',
+                       '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00', '19:00-20:00', '20:00-21:00'],
+        "courts": [f"{i}号羽毛球场" for i in range(1, 9)]  # 场地号 0~7
+    },
+    "516t": {
+        "open_time": time(9, 0),
+        "max_tickets_per_slot": 4,
+        "max_tickets_per_person_per_slot": 4,
+        "max_orders_per_person": 1,
+        "max_slots_per_order": 4,
+        "time_slots": ['09:00-09:30', '09:30-10:00', '10:00-10:30', '10:30-11:00', '11:00-11:30', '11:30-12:00',
+                       '12:00-12:30', '12:30-13:00', '13:00-13:30', '13:30-14:00', '14:00-14:30', '14:30-15:00',
+                       '15:00-15:30', '15:30-16:00', '16:00-16:30', '16:30-17:00', '17:00-17:30', '17:30-18:00',
+                       '18:00-18:30', '18:30-19:00', '19:00-19:30', '19:30-20:00', '20:00-20:30', '20:30-21:00'],
+        "courts": [f"{i}号网球场" for i in range(1, 4)]  # 场地号 0~2
+    }
+}
+
+
+# ==================== 检查函数 ====================
+def load_and_check_booking_tasks():
+    """
+    读取同目录下的 BookingTasks.json 并进行规则检查。
+    检查通过：返回转换后的任务组字典列表（内部表示）。
+    检查失败：返回包含错误原因的字符串。
+    """
+
+    try:
+        with open("BookingTasks.json", "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+    except json.JSONDecodeError as e:
+        return f"错误: JSON 解析失败 - {e}"
+
+    if not isinstance(raw_data, list):
+        return "错误: JSON 顶层结构必须是数组。"
+
+    errors = []
+    # 用于存储转换后的任务组列表
+    task_groups = []
+
+    # ---------- 逐任务组检查与转换 ----------
+    for group_idx, group in enumerate(raw_data, start=1):
+        # 基本结构校验
+        if not isinstance(group, dict):
+            errors.append(f"任务组 {group_idx}: 格式错误，不是有效对象。")
+            continue
+        venue_name = group.get("venue")
+        date_str = group.get("date")
+        immediate = group.get("immediate")  # 期望布尔值
+        tasks_raw = group.get("tasks")
+
+        # 检查必需字段存在性
+        if venue_name is None or date_str is None or immediate is None or tasks_raw is None:
+            errors.append(f"任务组 {group_idx}: 缺少必要字段 (venue/date/immediate/tasks)。")
+            continue
+        if not isinstance(tasks_raw, list):
+            errors.append(f"任务组 {group_idx}: 'tasks' 必须为数组。")
+            continue
+
+        # 检查场馆名有效性
+        if venue_name not in VENUE_CONFIG:
+            errors.append(f"任务组 {group_idx}: 无效场馆名 '{venue_name}'。")
+            continue
+        config = VENUE_CONFIG[venue_name]
+
+        # 解析日期
+        try:
+            task_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            errors.append(f"任务组 {group_idx}: 日期格式错误，需为 'YYYY-MM-DD'。")
+            continue
+
+        # 初始化任务组字典
+        group_dict = {
+            "venue_name": venue_name,
+            "date": task_date,
+            "immediate": immediate,
+            "booking_start_time": None,  # 稍后填充
+            "venue_open_time": None,  # 稍后填充
+            "tasks": []
+        }
+
+        # 如果非立即执行，计算开放时间和预订开始时间
+        if not immediate:
+            open_time = config["open_time"]
+            venue_open_datetime = datetime.combine(task_date, open_time)
+            booking_start = venue_open_datetime - timedelta(minutes=1)
+            group_dict["venue_open_time"] = venue_open_datetime
+            group_dict["booking_start_time"] = booking_start
+
+        # 遍历任务列表进行转换和规则检查
+        person_order_count = defaultdict(int)  # 统计每人订单数 (任务数)
+
+        for task_idx, task in enumerate(tasks_raw, start=1):
+            if not isinstance(task, dict):
+                errors.append(f"任务组 {group_idx}, 任务 {task_idx}: 格式错误。")
+                continue
+            person = task.get("person")
+            slots_raw = task.get("slots")
+            if person is None or slots_raw is None:
+                errors.append(f"任务组 {group_idx}, 任务 {task_idx}: 缺少 'person' 或 'slots'。")
+                continue
+            if not isinstance(slots_raw, list):
+                errors.append(f"任务组 {group_idx}, 任务 {task_idx}: 'slots' 必须为数组。")
+                continue
+
+            # 检查订单内场次数是否超过限制
+            if len(slots_raw) > config["max_slots_per_order"]:
+                errors.append(
+                    f"任务组 {group_idx}, 任务 {task_idx} ({person}): "
+                    f"场次数 {len(slots_raw)} 超过上限 {config['max_slots_per_order']}。"
+                )
+            # 转换场次列表
+            converted_slots = []
+            for slot_idx, slot in enumerate(slots_raw, start=1):
+                if not isinstance(slot, dict):
+                    errors.append(f"任务组 {group_idx}, 任务 {task_idx}, 场次 {slot_idx}: 格式错误。")
+                    continue
+                time_str = slot.get("time")
+                court_name = slot.get("court")
+                tickets = slot.get("tickets")
+                if time_str is None or court_name is None or tickets is None:
+                    errors.append(
+                        f"任务组 {group_idx}, 任务 {task_idx}, 场次 {slot_idx}: "
+                        "缺少 'time', 'court' 或 'tickets'。"
+                    )
+                    continue
+
+                # 时间段合法性及时间号转换
+                time_slots = config["time_slots"]
+                if time_str not in time_slots:
+                    errors.append(
+                        f"任务组 {group_idx}, 任务 {task_idx}, 场次 {slot_idx}: "
+                        f"无效时间段 '{time_str}'（场馆 {venue_name}）。"
+                    )
+                    continue
+                time_slot_num = time_slots.index(time_str)
+
+                # 场地名合法性及场地号转换
+                courts = config["courts"]
+                if court_name not in courts:
+                    errors.append(
+                        f"任务组 {group_idx}, 任务 {task_idx}, 场次 {slot_idx}: "
+                        f"无效场地名 '{court_name}'（场馆 {venue_name}）。"
+                    )
+                    continue
+                court_num = courts.index(court_name)
+
+                # 票数合法性（整数检查）
+                if not isinstance(tickets, int) or tickets <= 0:
+                    errors.append(
+                        f"任务组 {group_idx}, 任务 {task_idx}, 场次 {slot_idx}: "
+                        f"票数必须为正整数，实际为 {tickets}。"
+                    )
+                    continue
+
+                # 每人每场次最大票数
+                if tickets > config["max_tickets_per_person_per_slot"]:
+                    errors.append(
+                        f"任务组 {group_idx}, 任务 {task_idx}, 场次 {slot_idx} "
+                        f"({person}): 订票数 {tickets} 超过每人每场次上限 "
+                        f"{config['max_tickets_per_person_per_slot']}。"
+                    )
+
+                converted_slots.append({
+                    "time_slot": time_slot_num,
+                    "court": court_num,
+                    "tickets": tickets
+                })
+
+            # 记录该任务（订单）到任务组
+            group_dict["tasks"].append({
+                "person": person,
+                "slots": converted_slots
+            })
+            person_order_count[person] += 1
+
+        # 检查每人订单数上限
+        for person, count in person_order_count.items():
+            if count > config["max_orders_per_person"]:
+                errors.append(
+                    f"任务组 {group_idx}: {person} 的订单数 {count} 超过上限 "
+                    f"{config['max_orders_per_person']}。"
+                )
+
+        # 汇总同一任务组内每个场次的票数总和，检查场次总票数上限
+        slot_tickets_sum = defaultdict(int)  # key: (time_slot, court)
+        for task in group_dict["tasks"]:
+            for slot in task["slots"]:
+                key = (slot["time_slot"], slot["court"])
+                slot_tickets_sum[key] += slot["tickets"]
+
+        for (ts, court), total in slot_tickets_sum.items():
+            if total > config["max_tickets_per_slot"]:
+                time_str = config["time_slots"][ts]
+                court_str = config["courts"][court]
+                errors.append(
+                    f"任务组 {group_idx}: 场次 ({time_str}, {court_str}) 总票数 {total} "
+                    f"超过上限 {config['max_tickets_per_slot']}。"
+                )
+
+        task_groups.append(group_dict)
+
+    if errors:
+        return "检查未通过，发现以下错误:\n" + "\n".join(
+            f"{i + 1}. {err}" for i, err in enumerate(errors)
+        )
+    else:
+        return task_groups
 
 
 def check_booking_tasks():
@@ -98,9 +328,35 @@ def check_booking_tasks():
         return ""
 
 
+async def check_cookies_new():
+    try:
+        with open("BookingTasks.json", "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+            c_set = set()
+            for task_group in raw_data:
+                for task in task_group["tasks"]:
+                    c_set.add(task["person"])
+            check_cookies_tasks = []
+            err_msg_list = []
+            x_i = 0
+            for x in c_set:
+                check_cookies_tasks.append(check_person_cookies_by_browser(x, x_i, err_msg_list))
+                x_i += 1
+            results = await asyncio.gather(*check_cookies_tasks)
+            if all(results):
+                return True
+            else:
+                print(f"[{get_current_time()}] Cookies检查未通过，发现以下错误：")
+                for err in err_msg_list:
+                    print(err)
+                return False
+    except json.JSONDecodeError:
+        return False
+
+
 async def check_cookies():
     c_set = set()
-    with open("BookingTaskList.txt", "r",encoding='utf-8') as fc:
+    with open("BookingTaskList.txt", "r", encoding='utf-8') as fc:
         for tp in fc.readlines():
             c_set.add(tp.split()[0])
     check_cookies_tasks = []
@@ -143,9 +399,26 @@ async def check_person_cookies_by_browser(c, c_i, err_msg_list):
         return False
 
 
+# TODO：新的读取逻辑完成了，接下来需要整合到代码中（已经完成load_and_check_booking_tasks和check_cookies_new）
+# ==================== 示例用法 ====================
+async def mainabc():
+    result = load_and_check_booking_tasks()
+    if isinstance(result, list):
+        print("检查通过，任务组列表：")
+        print(json.dumps(result, indent=2, default=str, ensure_ascii=False))
+    else:
+        print(result)
+    rs = await check_cookies_new()
+    print(rs)
+
+
+if __name__ == "__main__000":
+    nd.loop().run_until_complete(mainabc())
+
+
 def get_booking_task():
     rts = []
-    with open("BookingTaskList.txt", "r",encoding='utf-8') as btl:
+    with open("BookingTaskList.txt", "r", encoding='utf-8') as btl:
         tasks = btl.readlines()
         task_amount = len(tasks)
         for task in tasks:

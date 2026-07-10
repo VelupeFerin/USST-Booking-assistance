@@ -9,13 +9,13 @@ from time_utils import get_current_time
 
 
 class BasePageObject:
-    venue_516_url = 'https://usst.ydmap.cn/booking/schedule/102285?salesItemId=102831'
-    venue_1100_url = 'https://usst.ydmap.cn/booking/schedule/102293?salesItemId=102829'
+    title_xpath = '/html/head/title'
     user_my_url = 'https://usst.ydmap.cn/user/my'
     login_url = 'https://usst.ydmap.cn/user/login'
 
-    title_xpath = '/html/head/title'
-    venue_str_url_dict = {'516': venue_516_url, '1100': venue_1100_url}
+    venue_str_url_dict = {'516': 'https://usst.ydmap.cn/booking/schedule/102285?salesItemId=102831',
+                          '1100': 'https://usst.ydmap.cn/booking/schedule/102293?salesItemId=102829',
+                          '516t': 'https://usst.ydmap.cn/booking/schedule/102285?salesItemId=102828'}
 
     def __init__(self, page):
         self.page = page
